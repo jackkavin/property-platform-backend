@@ -6,6 +6,7 @@ import { logger } from './utils/logger';
 import { requestId, securityHeaders, sanitizeBody, parameterPollutionGuard, corsOriginValidator } from './middleware/security';
 import { generalRateLimiter } from './middleware/rateLimiter';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { httpRequestDuration } from './config/metrics';
 
 import healthRoutes from './routes/health.routes';
 import enquiryRoutes from './routes/enquiry.routes';
@@ -21,6 +22,24 @@ export function createApp(): Application {
   app.set('trust proxy', 1);
 
   app.use(requestId);
+
+  // Times every request and records it against the Prometheus histogram,
+  // labelled by the matched route pattern (not the raw URL, which would
+  // create unbounded label cardinality for e.g. /api/enquiry/:id with a
+  // different id on every request).
+  app.use((req, res, next) => {
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const durationSeconds = Number(process.hrtime.bigint() - start) / 1e9;
+      const route = (req.route?.path as string) || req.path;
+      httpRequestDuration.observe(
+        { method: req.method, route, status_code: String(res.statusCode) },
+        durationSeconds
+      );
+    });
+    next();
+  });
+
   app.use(securityHeaders);
   app.use(cors({ origin: corsOriginValidator, credentials: true }));
   app.use(compression());

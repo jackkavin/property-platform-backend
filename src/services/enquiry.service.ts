@@ -6,6 +6,7 @@ import { CreateEnquiryInput } from '../validators/enquiry.validator';
 import { enqueueCrmSync } from '../queues/crmSync.queue';
 import { enqueueEmail } from '../queues/email.queue';
 import { logger } from '../utils/logger';
+import { enquiriesCreatedTotal, enquiriesDuplicateTotal } from '../config/metrics';
 
 export interface EnquiryRecord extends RowDataPacket {
   id: number;
@@ -92,11 +93,13 @@ export async function createEnquiry(input: CreateEnquiryInput, ctx: CreateEnquir
       data: { fullName: enquiry.full_name, enquiryId: enquiry.id },
     });
 
+    enquiriesCreatedTotal.inc();
     return enquiry;
   } catch (err: any) {
     // MySQL error 1062 = duplicate entry on a unique index.
     if (err?.errno === 1062 || err?.code === 'ER_DUP_ENTRY') {
       logger.warn('Duplicate enquiry submission blocked', { fingerprint, email: input.email });
+      enquiriesDuplicateTotal.inc();
       throw new ConflictError('An identical enquiry has already been submitted recently.');
     }
     throw err;

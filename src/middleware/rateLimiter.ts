@@ -4,6 +4,7 @@ import { RedisStore } from 'rate-limit-redis';
 import { redisClient } from '../config/redis';
 import { env } from '../config/env';
 import { TooManyRequestsError } from './errorHandler';
+import { rateLimitExceededTotal } from '../config/metrics';
 
 /**
  * Vulnerability this directly fixes: "Unrestricted request volume enabling
@@ -28,6 +29,7 @@ function buildLimiter(windowMs: number, max: number, keyPrefix: string) {
       prefix: keyPrefix,
     }),
     handler: () => {
+      rateLimitExceededTotal.inc({ limiter: keyPrefix });
       throw new TooManyRequestsError('Too many requests. Please slow down and try again later.');
     },
     // express-rate-limit requires IPv6 addresses to go through its own
