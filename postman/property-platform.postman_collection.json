@@ -1,0 +1,108 @@
+{
+  "info": {
+    "name": "Property Platform Backend",
+    "description": "REST API collection for the Property Platform backend assessment.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "crmWebhookSecret", "value": "change_me_webhook_shared_secret" },
+    { "key": "enquiryId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        { "name": "Liveness", "request": { "method": "GET", "url": "{{baseUrl}}/health" } },
+        { "name": "Readiness", "request": { "method": "GET", "url": "{{baseUrl}}/health/ready" } }
+      ]
+    },
+    {
+      "name": "Enquiries",
+      "item": [
+        {
+          "name": "Create Enquiry",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "url": "{{baseUrl}}/api/enquiry",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Jane Doe\",\n  \"email\": \"jane@example.com\",\n  \"phone\": \"+919876543210\",\n  \"propertyId\": 1,\n  \"message\": \"I'd like to schedule a viewing this weekend.\",\n  \"source\": \"website\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Enquiry By Id",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/enquiry/{{enquiryId}}" }
+        },
+        {
+          "name": "List Enquiries (offset)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/enquiries?page=1&limit=20" }
+        },
+        {
+          "name": "List Enquiries (cursor)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/enquiries?cursor=50&limit=20" }
+        },
+        {
+          "name": "List Enquiries (filtered by status)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/enquiries?status=new&limit=20" }
+        }
+      ]
+    },
+    {
+      "name": "CRM Webhook",
+      "item": [
+        {
+          "name": "CRM Status Update (signed)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = JSON.stringify({ event: 'lead.status_changed', enquiryId: Number(pm.collectionVariables.get('enquiryId')), crmRecordId: 'crm_test_123', status: 'contacted' });",
+                  "pm.collectionVariables.set('signedBody', body);",
+                  "const secret = pm.collectionVariables.get('crmWebhookSecret');",
+                  "const hmac = CryptoJS.HmacSHA256(body, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.collectionVariables.set('crmSignature', 'sha256=' + hmac);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-CRM-Signature", "value": "{{crmSignature}}" }
+            ],
+            "url": "{{baseUrl}}/api/webhook/crm",
+            "body": { "mode": "raw", "raw": "{{signedBody}}" }
+          }
+        },
+        {
+          "name": "CRM Webhook (unsigned - should 401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/webhook/crm",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"lead.status_changed\",\n  \"enquiryId\": 1,\n  \"crmRecordId\": \"crm_fake\",\n  \"status\": \"converted\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Properties (WPGraphQL CMS)",
+      "item": [
+        { "name": "List Properties", "request": { "method": "GET", "url": "{{baseUrl}}/api/properties?first=20" } },
+        { "name": "Get Property By Slug", "request": { "method": "GET", "url": "{{baseUrl}}/api/properties/3bhk-sea-view-apartment-bandra" } }
+      ]
+    }
+  ]
+}

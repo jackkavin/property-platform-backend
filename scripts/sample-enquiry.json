@@ -1,0 +1,8 @@
+{
+  "fullName": "Load Test User",
+  "email": "loadtest+{{$randomInt}}@example.com",
+  "phone": "+919876543210",
+  "propertyId": 1,
+  "message": "I'm interested in scheduling a site visit for this property.",
+  "source": "website"
+}
