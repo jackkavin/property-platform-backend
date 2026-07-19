@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 // @ts-ignore - types ship separately and lag behind the package version
 import { RedisStore } from 'rate-limit-redis';
 import { redisClient } from '../config/redis';
@@ -30,7 +30,12 @@ function buildLimiter(windowMs: number, max: number, keyPrefix: string) {
     handler: () => {
       throw new TooManyRequestsError('Too many requests. Please slow down and try again later.');
     },
-    keyGenerator: (req) => req.ip || 'unknown',
+    // express-rate-limit requires IPv6 addresses to go through its own
+    // helper (rather than being used raw) so they're normalized to a
+    // consistent subnet-level key - otherwise an IPv6 client could bypass
+    // the limit entirely by requesting a new address from their own /64
+    // block on every request.
+    keyGenerator: (req) => ipKeyGenerator(req.ip || 'unknown'),
   });
 }
 

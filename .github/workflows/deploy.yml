@@ -1,0 +1,41 @@
+name: Deploy to VPS
+
+# Manually triggered (Actions tab -> "Deploy to VPS" -> "Run workflow"),
+# rather than automatic-on-push, so a deploy is always a deliberate action -
+# appropriate for a small single-VPS setup without a staging environment.
+#
+# INACTIVE UNTIL CONFIGURED: requires 3 repo secrets to be set under
+# Settings -> Secrets and variables -> Actions before this can run:
+#   VPS_HOST        - your droplet's IP or domain
+#   VPS_SSH_USER     - the non-root deploy user (see DEPLOYMENT.md)
+#   VPS_SSH_KEY      - the private key matching a public key already
+#                       authorized on that user's ~/.ssh/authorized_keys
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_SSH_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/property-platform-backend
+            git pull origin main
+            docker compose build api worker
+            docker compose up -d
+            docker compose ps
+            # Basic post-deploy smoke check - fails the workflow loudly if
+            # the app doesn't come back up healthy, instead of silently
+            # leaving a broken deploy live.
+            sleep 5
+            curl -f http://localhost:3000/health/ready || (echo "Health check failed after deploy" && exit 1)

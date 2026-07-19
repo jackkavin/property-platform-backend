@@ -1,5 +1,7 @@
 name: CI
 
+# Runs on every push and PR to main - catches broken builds/tests before
+# they ever reach a deployment step, and before a teammate pulls broken code.
 on:
   push:
     branches: [main]
@@ -11,6 +13,9 @@ jobs:
     name: Lint, Test & Build
     runs-on: ubuntu-latest
 
+    # Spin up real MySQL + Redis service containers for this CI run, so
+    # tests that need them (not just the pure-function tests we ship today)
+    # have somewhere real to run against as the test suite grows.
     services:
       mysql:
         image: mysql:8.0
@@ -57,14 +62,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
 
       - name: Lint
         run: npm run lint
-        continue-on-error: true
+        continue-on-error: true # style issues shouldn't block CI, but are visible in the run log
 
       - name: Run migrations against the CI database
         run: npm run migrate
@@ -94,6 +98,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Builds the production image to verify the Dockerfile itself is
+      # valid and produces a runnable image - does NOT push anywhere in
+      # this workflow. Wire up a registry login + push step here (Docker
+      # Hub, GHCR, etc.) once you're ready to automate deployment fully.
       - name: Build Docker image (verification only)
         uses: docker/build-push-action@v5
         with:
